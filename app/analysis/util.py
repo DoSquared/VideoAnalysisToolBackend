@@ -3,49 +3,81 @@ import scipy.interpolate as interpolate
 import numpy as np
 from app.analysis.finderPeaksSignal import peakFinder
 
-
 def filter_signal(raw_signal, fs=25, cut_off_frequency=5):
+    """
+    Applies a low-pass filter to the raw signal to remove high-frequency noise.
+
+    Parameters:
+    - raw_signal: The input signal that needs to be filtered.
+    - fs: The sampling frequency of the signal.
+    - cut_off_frequency: The cut-off frequency for the low-pass filter.
+
+    Returns:
+    - The filtered signal.
+    """
+    # Design a Butterworth low-pass filter.
     b, a = signal.butter(2, cut_off_frequency, fs=fs, btype='low', analog=False)
+    # Apply the filter to the raw signal using filtfilt to avoid phase distortion.
     return signal.filtfilt(b, a, raw_signal)
 
-
 def get_output(up_sample_signal, duration, start_time):
-    distance, velocity, peaks, indexPositiveVelocity, indexNegativeVelocity = peakFinder(up_sample_signal, fs=60,
-                                                                                         minDistance=3,
-                                                                                         cutOffFrequency=7.5, prct=0.05)
+    """
+    Processes the upsampled signal to detect peaks and valleys, calculate various metrics,
+    and organize the results into a structured output.
+
+    Parameters:
+    - up_sample_signal: The input signal that has been upsampled for processing.
+    - duration: The duration of the signal in seconds.
+    - start_time: The start time of the signal.
+
+    Returns:
+    - jsonFinal: A dictionary containing various processed data, including time-series data, peaks, valleys,
+      and statistical metrics.
+    """
+    # Use peakFinder to identify peaks and valleys in the signal.
+    distance, velocity, peaks, indexPositiveVelocity, indexNegativeVelocity = peakFinder(
+        up_sample_signal, fs=60, minDistance=3, cutOffFrequency=7.5, prct=0.05
+    )
+
+    # Create a time vector corresponding to the distance signal.
     line_time = []
     sizeOfDist = len(distance)
     for index, item in enumerate(distance):
         line_time.append((index / sizeOfDist) * duration + start_time)
 
+    # Initialize lists to store peaks, valleys, and their corresponding times.
     line_peaks = []
     line_peaks_time = []
     line_valleys_start = []
     line_valleys_start_time = []
     line_valleys_end = []
     line_valleys_end_time = []
-
     line_valleys = []
     line_valleys_time = []
 
+    # Process each detected peak to extract relevant information.
     for index, item in enumerate(peaks):
         # ax.plot(item['openingValleyIndex'], distance[item['openingValleyIndex']], 'ro', alpha=0.75)
         # ax.plot(item['peakIndex'], distance[item['peakIndex']], 'go', alpha=0.75)
         # ax.plot(item['closingValleyIndex'], distance[item['closingValleyIndex']], 'bo', alpha=0.75)
         # line_valleys.append(prevValley+item['openingValleyIndex'])
 
+        # Store the peak value and its corresponding time.
         line_peaks.append(distance[item['peakIndex']])
         line_peaks_time.append((item['peakIndex'] / sizeOfDist) * duration + start_time)
 
+        # Store the valley start and end values and their corresponding times.
         line_valleys_start.append(distance[item['openingValleyIndex']])
         line_valleys_start_time.append((item['openingValleyIndex'] / sizeOfDist) * duration + start_time)
 
         line_valleys_end.append(distance[item['closingValleyIndex']])
         line_valleys_end_time.append((item['closingValleyIndex'] / sizeOfDist) * duration + start_time)
 
+        # Store the valley value and its corresponding time.
         line_valleys.append(distance[item['openingValleyIndex']])
         line_valleys_time.append((item['openingValleyIndex'] / sizeOfDist) * duration + start_time)
 
+    # Initialize lists to store calculated metrics for each peak.
     amplitude = []
     peakTime = []
     rmsVelocity = []
@@ -54,6 +86,7 @@ def get_output(up_sample_signal, duration, start_time):
     averageClosingSpeed = []
     cycleDuration = []
 
+    # Calculate various metrics for each peak.
     for idx, peak in enumerate(peaks):
         # Height measures
         x1 = peak['openingValleyIndex']
@@ -65,21 +98,25 @@ def get_output(up_sample_signal, duration, start_time):
         x = peak['peakIndex']
         y = distance[peak['peakIndex']]
 
+        # Linear interpolation between the opening and closing valleys to estimate the baseline.
         f = interpolate.interp1d(np.array([x1, x2]), np.array([y1, y2]))
 
+        # Calculate amplitude as the difference between the peak and the baseline.
         amplitude.append(y - f(x))
 
         # Opening Velocity
         rmsVelocity.append(np.sqrt(np.mean(velocity[peak['openingValleyIndex']:peak['closingValleyIndex']] ** 2)))
 
-
-        speed.append( (y - f(x)) / ((peak['closingValleyIndex']- peak['openingValleyIndex'])* (1 / 60)))
+        # Calculate speed, average opening speed, average closing speed, and cycle duration.
+        speed.append((y - f(x)) / ((peak['closingValleyIndex'] - peak['openingValleyIndex']) * (1 / 60)))
         averageOpeningSpeed.append((y - f(x)) / ((peak['peakIndex'] - peak['openingValleyIndex']) * (1 / 60)))
         averageClosingSpeed.append((y - f(x)) / ((peak['closingValleyIndex'] - peak['peakIndex']) * (1 / 60)))
-        cycleDuration.append((peak['closingValleyIndex'] - peak['openingValleyIndex'])* (1 / 60))
-        # timming
+        cycleDuration.append((peak['closingValleyIndex'] - peak['openingValleyIndex']) * (1 / 60))
+
+        # timming: Calculate the time of the peak within the cycle.
         peakTime.append(peak['peakIndex'] * (1 / 60))
 
+    # Calculate mean, standard deviation, and other statistics for the calculated metrics.
     meanAmplitude = np.mean(amplitude)
     stdAmplitude = np.std(amplitude)
 
@@ -98,6 +135,7 @@ def get_output(up_sample_signal, duration, start_time):
     rangeCycleDuration = np.max(np.diff(peakTime)) - np.min(np.diff(peakTime))
     rate = len(peaks) / (peaks[-1]['closingValleyIndex'] - peaks[0]['openingValleyIndex']) / (1 / 60)
 
+    # Divide the peaks into early and late groups to assess decay over time.
     earlyPeaks = peaks[:len(peaks) // 2]
     latePeaks = peaks[-len(peaks) // 2:]
     # amplitudeDecay = np.mean(distance[:len(peaks) // 3]) / np.mean(distance[-len(peaks) // 3:])
@@ -108,11 +146,11 @@ def get_output(up_sample_signal, duration, start_time):
                         len(latePeaks) / (
                         (latePeaks[-1]['closingValleyIndex'] - latePeaks[0]['openingValleyIndex']) / (1 / 60)))
 
+    # Calculate amplitude decay and velocity decay between early and late peaks.
     amplitudeDecay = np.array(amplitude)[:len(amplitude)//2].mean() / np.array(amplitude)[len(amplitude)//2:].mean()
     velocityDecay = np.array(rmsVelocity)[:len(rmsVelocity)//2].mean() / np.array(rmsVelocity)[len(rmsVelocity)//2:].mean()
 
-
-
+    # Calculate coefficient of variation (CV) for various metrics.
     cvAmplitude = stdAmplitude / meanAmplitude
     cvSpeed = stdSpeed / meanSpeed
     cvCycleDuration = stdCycleDuration / meanCycleDuration
@@ -120,6 +158,7 @@ def get_output(up_sample_signal, duration, start_time):
     cvAverageOpeningSpeed = stdAverageOpeningSpeed / meanAverageOpeningSpeed
     cvAverageClosingSpeed = stdAverageClosingSpeed / meanAverageClosingSpeed
 
+    # Organize all calculated data and metrics into a dictionary for output.
     jsonFinal = {
         "linePlot": {
             "data": distance,
