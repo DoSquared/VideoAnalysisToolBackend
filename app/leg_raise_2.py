@@ -590,12 +590,25 @@ def toe_tap_analysis(fps, bounding_box, start_time, end_time, input_video, is_le
     return jsonFinal
 
 def updateLandMarks(inputJson):
+    # Extract the task name from the input JSON to identify the type of analysis being performed.
     task_name = inputJson['task_name']
+    
+    # Extract the landmarks that need to be updated or analyzed from the input JSON.
     display_landmarks = inputJson['landmarks']
+    
+    # Extract the frames per second (fps) from the input JSON, which is crucial for time-based calculations.
     fps = inputJson['fps']
+    
+    # Extract the start time of the segment in the video that needs to be analyzed.
     start_time =  inputJson['start_time'] 
+    
+    # Extract the end time of the segment in the video that needs to be analyzed.
     end_time =  inputJson['end_time']
+    
+    # Initialize the normalization factor, which will be used to scale the landmarks.
     normalization_factor = 1
+    
+    # If a normalization factor is provided in the input JSON, use it instead of the default value.
     if 'normalization_factor' in inputJson:
         normalization_factor = inputJson['normalization_factor']
 
@@ -813,16 +826,29 @@ def updateLandMarks(inputJson):
 #     return jsonFinal
     
 
-def updatePeaksAndValleys(inputJson):
+def updateLandMarks(inputJson):
+    # Extract the task name from the input JSON to identify the type of analysis being performed.
+    task_name = inputJson['task_name']
     
-    peaksData = inputJson['peaks_Data']
-    peaksTime = inputJson['peaks_Time']
-    valleysStartData =  inputJson['valleys_StartData'] 
-    valleysStartTime =  inputJson['valleys_StartTime']
-    valleysEndData =  inputJson['valleys_EndData']
-    valleysEndTime =  inputJson['valleys_EndTime']
-    velocity =  inputJson['_velocity']
-
+    # Extract the landmarks that need to be updated or analyzed from the input JSON.
+    display_landmarks = inputJson['landmarks']
+    
+    # Extract the frames per second (fps) from the input JSON, which is crucial for time-based calculations.
+    fps = inputJson['fps']
+    
+    # Extract the start time of the segment in the video that needs to be analyzed.
+    start_time =  inputJson['start_time'] 
+    
+    # Extract the end time of the segment in the video that needs to be analyzed.
+    end_time =  inputJson['end_time']
+    
+    # Initialize the normalization factor, which will be used to scale the landmarks.
+    normalization_factor = 1
+    
+    # If a normalization factor is provided in the input JSON, use it instead of the default value.
+    if 'normalization_factor' in inputJson:
+        normalization_factor = inputJson['normalization_factor']
+        
     # Sort valleysStartTime and get the permutation indices
     sorted_indices = sorted(range(len(valleysStartTime)), key=lambda k: valleysStartTime[k])
 
@@ -897,14 +923,29 @@ def updatePeaksAndValleys(inputJson):
 
     # meanRMSVelocity = np.mean(rmsVelocity)
     # stdRMSVelocity = np.std(rmsVelocity)
+    
+ # Calculate the mean of the average opening speeds across all cycles.
     meanAverageOpeningSpeed = np.mean(averageOpeningSpeed)
+    
+    # Calculate the standard deviation of the average opening speeds to assess the variability.
     stdAverageOpeningSpeed = np.std(averageOpeningSpeed)
+    
+    # Calculate the mean of the average closing speeds across all cycles.
     meanAverageClosingSpeed = np.mean(averageClosingSpeed)
+    
+    # Calculate the standard deviation of the average closing speeds to assess the variability.
     stdAverageClosingSpeed = np.std(averageClosingSpeed)
 
+    # Calculate the mean duration of each cycle by finding the differences between peak times and averaging them.
     meanCycleDuration = np.mean(np.diff(peakTime))
+    
+    # Calculate the standard deviation of the cycle durations to understand the variability in cycle lengths.
     stdCycleDuration = np.std(np.diff(peakTime))
+    
+    # Calculate the range of cycle durations, which is the difference between the maximum and minimum cycle lengths.
     rangeCycleDuration = np.max(np.diff(peakTime)) - np.min(np.diff(peakTime))
+    
+    # Calculate the rate of cycles per minute. This is the number of peaks divided by the time between the first and last valley.
     rate = len(peaksTime) / (valleysEndTime[0] - valleysStartTime[0]) / (1 / 60)
 
     cvAmplitude = stdAmplitude / meanAmplitude
@@ -937,17 +978,32 @@ def updatePeaksAndValleys(inputJson):
     return radarTable
 
 def leg_raise_yolo(fps, bounding_box, start_time, end_time, input_video, is_left_leg):
-
+    
+    # Load the YOLO NAS model for pose estimation, pretrained on the COCO dataset for pose tasks.
     model = models.get("yolo_nas_pose_l", pretrained_weights="coco_pose")
+    
+    # Determine if Metal Performance Shaders (MPS) are available for GPU acceleration; otherwise, use the CPU.
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
+    
+    # Move the model to the selected device (either MPS or CPU).
     model.to(device)
+    
+    # Set the confidence threshold for pose estimation to filter out low-confidence detections.
     confidence = 0.7
 
+    # Open the video file for processing.
     video = cv2.VideoCapture(input_video)
 
+    # Calculate the frame number where processing should start, based on the start time and frames per second.
     start_frame = round(fps * start_time)
+    
+    # Calculate the frame number where processing should end, based on the end time and frames per second.
     end_frame = round(fps * end_time)
+    
+    # Set the video to start reading from the calculated start frame.
     video.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+    
+    # Initialize the frame counter to start from the start frame.
     frameCounter = start_frame
 
     knee_landmarks = []
@@ -956,20 +1012,27 @@ def leg_raise_yolo(fps, bounding_box, start_time, end_time, input_video, is_left
 
     knee_landmark_pos = 14
 
+  # Check if the analysis is for the left leg. If so, set the knee landmark position to 13 (left knee).
     if is_left_leg is True:
-        knee_landmark_pos = 13
+        knee_landmark_pos = 13  # Landmark index for the left knee.
 
+    # Initialize a list to store torso height measurements for normalization.
     torso = []
+    
+    # Loop through the video frames starting from the start frame to the end frame.
     while frameCounter < end_frame:
+        # Read the current frame from the video.
         status, frame = video.read()
+        
+        # If the frame could not be read (end of video or error), exit the loop.
         if status == False:
             break
 
-        x1 = bounding_box['x']
-        y1 = bounding_box['y']
-        x2 = x1 + bounding_box['width']
-        y2 = y1 + bounding_box['height']
-
+        # Extract the bounding box coordinates for the region of interest (ROI).
+        x1 = bounding_box['x']  # Top-left x-coordinate.
+        y1 = bounding_box['y']  # Top-left y-coordinate.
+        x2 = x1 + bounding_box['width']  # Bottom-right x-coordinate.
+        y2 = y1 + bounding_box['height']  # Bottom-right y-coordinate.
         # Extracting the ROI based on the bounding box
         roi = frame[y1:y2, x1:x2]
 
@@ -1035,45 +1098,64 @@ def leg_raise_yolo(fps, bounding_box, start_time, end_time, input_video, is_left
     line_valleys = []
     line_valleys_time = []
 
-    for index, item in enumerate(peaks):
+for index, item in enumerate(peaks):
         # ax.plot(item['openingValleyIndex'], distance[item['openingValleyIndex']], 'ro', alpha=0.75)
         # ax.plot(item['peakIndex'], distance[item['peakIndex']], 'go', alpha=0.75)
         # ax.plot(item['closingValleyIndex'], distance[item['closingValleyIndex']], 'bo', alpha=0.75)
         # line_valleys.append(prevValley+item['openingValleyIndex'])
 
+        # Append the peak distance to the line_peaks list.
         line_peaks.append(distance[item['peakIndex']])
+        
+        # Calculate the time for each peak based on its index and append it to the line_peaks_time list.
         line_peaks_time.append((item['peakIndex'] / sizeOfDist) * duration + start_time)
 
+        # Append the starting valley distance to the line_valleys_start list.
         line_valleys_start.append(distance[item['openingValleyIndex']])
+        
+        # Calculate the time for the start of each valley and append it to the line_valleys_start_time list.
         line_valleys_start_time.append((item['openingValleyIndex'] / sizeOfDist) * duration + start_time)
 
+        # Append the ending valley distance to the line_valleys_end list.
         line_valleys_end.append(distance[item['closingValleyIndex']])
+        
+        # Calculate the time for the end of each valley and append it to the line_valleys_end_time list.
         line_valleys_end_time.append((item['closingValleyIndex'] / sizeOfDist) * duration + start_time)
 
+        # Append the starting valley distance again to the line_valleys list (for general valley data).
         line_valleys.append(distance[item['openingValleyIndex']])
+        
+        # Calculate the time for the general valley and append it to the line_valleys_time list.
         line_valleys_time.append((item['openingValleyIndex'] / sizeOfDist) * duration + start_time)
+    
+    # Initialize lists to store various metrics calculated for each cycle.
+    amplitude = []  # To store the amplitude of each cycle.
+    peakTime = []  # To store the time of each peak.
+    rmsVelocity = []  # To store the RMS velocity for each cycle.
+    maxOpeningSpeed = []  # To store the maximum opening speed of each cycle.
+    maxClosingSpeed = []  # To store the maximum closing speed of each cycle.
+    averageOpeningSpeed = []  # To store the average opening speed of each cycle.
+    averageClosingSpeed = []  # To store the average closing speed of each cycle.
 
-    amplitude = []
-    peakTime = []
-    rmsVelocity = []
-    maxOpeningSpeed = []
-    maxClosingSpeed = []
-    averageOpeningSpeed = []
-    averageClosingSpeed = []
-
+    # Loop through each detected peak to calculate various metrics.
     for idx, peak in enumerate(peaks):
         # Height measures
+        # Get the index and corresponding distance for the opening valley.
         x1 = peak['openingValleyIndex']
-        y1 = distance[peak['openingValleyIndex']]
+        y1 = distance[x1]
 
+        # Get the index and corresponding distance for the closing valley.
         x2 = peak['closingValleyIndex']
-        y2 = distance[peak['closingValleyIndex']]
+        y2 = distance[x2]
 
+        # Get the index and corresponding distance for the peak.
         x = peak['peakIndex']
-        y = distance[peak['peakIndex']]
+        y = distance[x]
 
+        # Interpolate between the opening and closing valleys to create a baseline function.
         f = interpolate.interp1d(np.array([x1, x2]), np.array([y1, y2]))
 
+        # Calculate the amplitude of the peak by subtracting the interpolated baseline value from the peak value.
         amplitude.append(y - f(x))
 
         # Opening Velocity
@@ -1088,33 +1170,76 @@ def leg_raise_yolo(fps, bounding_box, start_time, end_time, input_video, is_left
     meanAmplitude = np.mean(amplitude)
     stdAmplitude = np.std(amplitude)
 
+    # Calculate the mean of the root mean square (RMS) velocities across all cycles.
     meanRMSVelocity = np.mean(rmsVelocity)
+    
+    # Calculate the standard deviation of the RMS velocities to assess variability.
     stdRMSVelocity = np.std(rmsVelocity)
+    
+    # Calculate the mean of the average opening speeds across all cycles.
     meanAverageOpeningSpeed = np.mean(averageOpeningSpeed)
+    
+    # Calculate the standard deviation of the average opening speeds to understand variability.
     stdAverageOpeningSpeed = np.std(averageOpeningSpeed)
+    
+    # Calculate the mean of the average closing speeds across all cycles.
     meanAverageClosingSpeed = np.mean(averageClosingSpeed)
+    
+    # Calculate the standard deviation of the average closing speeds to assess variability.
     stdAverageClosingSpeed = np.std(averageClosingSpeed)
 
+    # Calculate the mean duration of each cycle by finding the differences between peak times and averaging them.
     meanCycleDuration = np.mean(np.diff(peakTime))
+    
+    # Calculate the standard deviation of the cycle durations to understand the variability in cycle lengths.
     stdCycleDuration = np.std(np.diff(peakTime))
+    
+    # Calculate the range of cycle durations, which is the difference between the maximum and minimum cycle lengths.
     rangeCycleDuration = np.max(np.diff(peakTime)) - np.min(np.diff(peakTime))
+    
+    # Calculate the rate of cycles per minute. This is the number of peaks divided by the time between the first and last valley.
     rate = len(peaks) / (peaks[-1]['closingValleyIndex'] - peaks[0]['openingValleyIndex']) / (1 / 60)
 
+    # Divide the peaks into two groups: early and late. The earlyPeaks list contains the first third of the peaks,
+    # while the latePeaks list contains the last third of the peaks.
     earlyPeaks = peaks[:len(peaks) // 3]
     latePeaks = peaks[-len(peaks) // 3:]
+
+    # Calculate the amplitude decay by comparing the mean amplitude of the early peaks to the mean amplitude of the late peaks.
+    # A higher ratio indicates a greater decay in amplitude over time.
     amplitudeDecay = np.mean(distance[:len(peaks) // 3]) / np.mean(distance[-len(peaks) // 3:])
+    
+    # Calculate the velocity decay by comparing the RMS velocity between the early and late peaks.
+    # The velocity is computed as the square root of the mean of the squared velocities.
     velocityDecay = np.sqrt(
         np.mean(velocity[earlyPeaks[0]['openingValleyIndex']:earlyPeaks[-1]['closingValleyIndex']] ** 2)) / np.sqrt(
         np.mean(velocity[latePeaks[0]['openingValleyIndex']:latePeaks[-1]['closingValleyIndex']] ** 2))
+
+    # Calculate the rate decay by comparing the rate of cycles (peaks per unit time) between the early and late peaks.
+    # This measures how the rate of motion changes over time.
     rateDecay = (len(earlyPeaks) / (
             (earlyPeaks[-1]['closingValleyIndex'] - earlyPeaks[0]['openingValleyIndex']) / (1 / 60))) / (
                         len(latePeaks) / (
                         (latePeaks[-1]['closingValleyIndex'] - latePeaks[0]['openingValleyIndex']) / (1 / 60)))
 
+    # Calculate the coefficient of variation (CV) for amplitude.
+    # CV is a measure of relative variability, calculated as the ratio of the standard deviation to the mean.
     cvAmplitude = stdAmplitude / meanAmplitude
+    
+    # Calculate the coefficient of variation for cycle duration.
+    # This gives an idea of the variability in the cycle duration relative to the mean cycle duration.
     cvCycleDuration = stdCycleDuration / meanCycleDuration
+    
+    # Calculate the coefficient of variation for RMS velocity.
+    # This shows the variability in RMS velocity relative to the mean RMS velocity.
     cvRMSVelocity = stdRMSVelocity / meanRMSVelocity
+    
+    # Calculate the coefficient of variation for average opening speed.
+    # This indicates how much the opening speed varies relative to its mean.
     cvAverageOpeningSpeed = stdAverageOpeningSpeed / meanAverageOpeningSpeed
+    
+    # Calculate the coefficient of variation for average closing speed.
+    # This reflects the variability in closing speed relative to its mean.
     cvAverageClosingSpeed = stdAverageClosingSpeed / meanAverageClosingSpeed
 
     # results = np.array([meanAmplitude, stdAmplitude,
@@ -1187,34 +1312,47 @@ def leg_raise_yolo(fps, bounding_box, start_time, end_time, input_video, is_left
     # # Writing to sample.json
     file_name = "leg_agility_left" if is_left_leg is True else "leg_agility_right"
 
+    # Open a file in write mode with the specified file name and a .json extension.
     with open(file_name + ".json", "w") as outfile:
+        # Write the serialized JSON object to the file.
         outfile.write(json_object)
 
+    # Return the final JSON data, which contains all the calculated metrics and analysis results.
     return jsonFinal
-
-
-
-
-
-
 
 def final_analysis(inputJson, inputVideo):
     # %%
-    # Read boundingbox file
+    # The following commented-out lines were likely used during development or testing to read the bounding box data
+    # from a file. This code is now replaced by reading the input directly from the provided inputJson.
+    
+    # Read bounding box file
     # f = open('leg_raise_task_data.json')
 
     # returns JSON object as
     # a dictionary
     # data = json.load(f)
+
+    # Use the input JSON data provided as an argument.
     data = inputJson
 
+    # Extract the bounding box coordinates from the JSON data.
     boundingBox = data['boundingBox']
+    
+    # Extract the frames per second (fps) from the JSON data.
     fps = data['fps']
+    
+    # Extract the start time of the segment to be analyzed from the JSON data.
     start_time = data['start_time']
+    
+    # Extract the end time of the segment to be analyzed from the JSON data.
     end_time = data['end_time']
+    
+    # Extract the task name, which indicates the specific type of analysis to be performed.
     task_name = data['task_name']
     
+    # Perform the analysis using the extracted parameters and return the result.
     return analysis(boundingBox, start_time, end_time, inputVideo, task_name)
+
 
     # if task_name == 'Leg agility - Right':
     #     return leg_raise_yolo(fps, boundingBox, start_time, end_time, inputVideo, False)
