@@ -10,59 +10,67 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
-from pathlib import Path
+from pathlib import Path  # Import Path class from pathlib to handle filesystem paths
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
+# BASE_DIR is the root directory of the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
+# This is the secret key used for cryptographic signing in Django
 SECRET_KEY = 'django-insecure-1li*zjo=v1wq#1mt+pla9@m^niwkkqn^qj)(uum8)h1rl$iv)c'
 
 # SECURITY WARNING: don't run with debug turned on in production!
+# DEBUG mode should be False in production environments for security reasons
 DEBUG = True
 
+# ALLOWED_HOSTS defines a list of host/domain names that this Django site can serve.
+# '*' allows all hosts which is not secure for production
 ALLOWED_HOSTS = ['*']
 
 # Application definition
-
+# INSTALLED_APPS is a list of strings designating all applications that are enabled in this Django instance.
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'app',
-    'rest_framework',
-    'corsheaders'
+    'django.contrib.admin',  # Admin interface
+    'django.contrib.auth',  # Authentication framework
+    'django.contrib.contenttypes',  # Django content type system (allows permissions to be associated with models)
+    'django.contrib.sessions',  # Session framework
+    'django.contrib.messages',  # Messaging framework
+    'django.contrib.staticfiles',  # Manages static files (CSS, JavaScript, Images)
+    'app',  # Custom app named 'app'
+    'rest_framework',  # Django REST framework for building APIs
+    'corsheaders',  # Handles Cross-Origin Resource Sharing (CORS) for the app
 ]
 
+# CORS_ORIGIN_ALLOW_ALL allows all domains to make requests to the API, which is useful for development but should be restricted in production
 CORS_ORIGIN_ALLOW_ALL = True
 
+# MIDDLEWARE is a list of middleware classes to be used by the Django request/response system.
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django.middleware.security.SecurityMiddleware',  # Security-related middleware
+    'django.contrib.sessions.middleware.SessionMiddleware',  # Manages sessions across requests
+    'corsheaders.middleware.CorsMiddleware',  # Middleware for handling CORS
+    'django.middleware.common.CommonMiddleware',  # Various simple fixes to improve Django’s behavior
+    'django.middleware.csrf.CsrfViewMiddleware',  # Middleware for Cross Site Request Forgery protection
+    'django.contrib.auth.middleware.AuthenticationMiddleware',  # Associates users with requests using sessions
+    'django.contrib.messages.middleware.MessageMiddleware',  # Adds support for cookie- and session-based messaging
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',  # Clickjacking protection via X-Frame-Options header
 ]
 
+# ROOT_URLCONF is a string representing the full Python import path to your root URLconf.
 ROOT_URLCONF = 'backend.urls'
 
+# TEMPLATES is a list of template engine settings used by Django’s template system.
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates']
-        ,
-        'APP_DIRS': True,
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',  # Django template engine
+        'DIRS': [BASE_DIR / 'templates'],  # List of directories where Django will search for templates
+        'APP_DIRS': True,  # Whether Django should look for templates inside installed applications
         'OPTIONS': {
-            'context_processors': [
+            'context_processors': [  # List of context processors to be used by the template engine
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
@@ -72,60 +80,66 @@ TEMPLATES = [
     },
 ]
 
+# WSGI_APPLICATION is a string representing the full Python import path to the WSGI application used by Django’s runserver.
 WSGI_APPLICATION = 'backend.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
+# DATABASES defines the database configurations
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.sqlite3',  # Using SQLite as the database engine
+        'NAME': BASE_DIR / 'db.sqlite3',  # Path to the database file
     }
 }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
-
+# AUTH_PASSWORD_VALIDATORS contains a list of validators used to check the strength of user passwords.
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',  # Ensures passwords aren't too similar to user's other attributes
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',  # Enforces a minimum password length
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',  # Prevents the use of common passwords
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',  # Prevents the use of all-numeric passwords
     },
 ]
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
-
+# LANGUAGE_CODE defines the default language for the application
 LANGUAGE_CODE = 'en-us'
 
+# TIME_ZONE defines the default timezone for the application
 TIME_ZONE = 'UTC'
 
+# USE_I18N enables Django’s translation system
 USE_I18N = True
 
+# USE_TZ enables timezone-aware datetime objects
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
-
+# STATIC_URL is the URL to use when referring to static files
 STATIC_URL = 'static/'
 
+# STATICFILES_DIRS is a list of directories where Django will also look for static files, apart from each app's 'static' directory
 STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
 
-
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
-
+# DEFAULT_AUTO_FIELD specifies the type of primary key to use for models that don’t have a field with `primary_key=True`
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# DATA_UPLOAD_MAX_MEMORY_SIZE sets the maximum size (in bytes) for uploaded files.
+# Here, it is set to approximately 5GB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880000
