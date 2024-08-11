@@ -13,30 +13,52 @@ from app.analysis.finderPeaksSignal import peakFinder
 
 
 def json_serialize(obj):
+    # Check if the object is a NumPy ndarray (which is not directly serializable to JSON).
     if isinstance(obj, np.ndarray):
+        # Convert the ndarray to a list, which is JSON-serializable.
         return obj.tolist()
+    # If the object is not an ndarray, return it as is.
     return obj
 
 
 def filterSignal(rawSignal, fs=25, cutOffFrequency=5):
+    # Design a low-pass Butterworth filter. The 'butter' function returns the filter coefficients 'b' and 'a'.
+    # The filter is of order 2, with a cutoff frequency specified by cutOffFrequency, and the sampling frequency is 'fs'.
     b, a = signal.butter(2, cutOffFrequency, fs=fs, btype='low', analog=False)
+    
+    # Apply the filter to the raw signal using 'filtfilt', which applies the filter forwards and backwards,
+    # ensuring zero phase distortion. This function returns the filtered signal.
     return signal.filtfilt(b, a, rawSignal)
 
-
 def finger_tap(fps, bounding_box, start_time, end_time, input_video, is_left_leg):
+    # Set up the running mode for MediaPipe's vision tasks, specifically for processing video frames.
     VisionRunningMode = mp.tasks.vision.RunningMode
+    
+    # Define the base options for the MediaPipe Hand Landmarker, specifying the model file path.
     base_options = python.BaseOptions(model_asset_path='app/models/hand_landmarker.task')
+    
+    # Configure the Hand Landmarker with the specified options:
+    # - 'num_hands' is set to 2 to track up to two hands.
+    # - 'running_mode' is set to VIDEO for processing video input.
     options = vision.HandLandmarkerOptions(
         base_options=base_options, num_hands=2, running_mode=VisionRunningMode.VIDEO)
 
+    # Create the Hand Landmarker detector using the specified options.
     detector = vision.HandLandmarker.create_from_options(options=options)
-    # %%
-    # detector = vision.HandLandmarker.create_from_options(options)
+
+    # Open the video file for processing.
     video = cv2.VideoCapture(input_video)
 
+    # Calculate the frame number where processing should start, based on the start time and frames per second.
     start_frame = round(fps * start_time)
+    
+    # Calculate the frame number where processing should end, based on the end time and frames per second.
     end_frame = round(fps * end_time)
+    
+    # Set the video to start reading from the calculated start frame.
     video.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+    
+    # Initialize the frame counter to start from the start frame.
     frameCounter = start_frame
 
     knee_landmarks = []
@@ -51,22 +73,36 @@ def finger_tap(fps, bounding_box, start_time, end_time, input_video, is_left_leg
     if is_left_leg is True:
         knee_landmark_pos = 8
 
+    # Loop through the video frames starting from the start frame to the end frame.
     while frameCounter < end_frame:
+        # Read the current frame from the video.
         status, frame = video.read()
+        
+        # If the frame could not be read (end of video or error), exit the loop.
         if status == False:
             break
 
         # detect landmarks
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        # crop frame based on bounding box info
-        x1 = bounding_box['x']
-        y1 = bounding_box['y']
-        x2 = x1 + bounding_box['width']
-        y2 = y1 + bounding_box['height']
+        # Crop the frame based on the bounding box information to focus on the region of interest (ROI).
+        x1 = bounding_box['x']  # The x-coordinate of the top-left corner of the bounding box.
+        y1 = bounding_box['y']  # The y-coordinate of the top-left corner of the bounding box.
+        x2 = x1 + bounding_box['width']  # The x-coordinate of the bottom-right corner.
+        y2 = y1 + bounding_box['height']  # The y-coordinate of the bottom-right corner.
+
+        # Extract the ROI from the frame using the bounding box coordinates.
+        # The frame is cropped to the specified bounding box and converted to an unsigned 8-bit integer type.
         Imagedata = frame[y1:y2, x1:x2, :].astype(np.uint8)
+        
+        # Convert the cropped image data to a MediaPipe Image format with SRGB color space.
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=Imagedata)
+        
+        # Use the hand detector to detect landmarks in the video frame within the bounding box.
+        # The detection is performed based on the current frame number.
         detection_result = detector.detect_for_video(image, frameCounter)
+        
+        # Increment the frame counter to move to the next frame in the video.
         frameCounter = frameCounter + 1
 
         if is_left_leg:
@@ -305,11 +341,14 @@ def finger_tap(fps, bounding_box, start_time, end_time, input_video, is_left_leg
 
     # Writing to sample.json
     file_name = "finger_tap_left" if is_left_leg is True else "finger_tap_right"
+    
+    # Open a file in write mode with the specified file name and a .json extension.
     with open(file_name + ".json", "w") as outfile:
+        # Write the serialized JSON object to the file.
         outfile.write(json_object)
 
+    # Return the final JSON data, which contains all the calculated metrics and analysis results.
     return jsonFinal
-
 
 def hand_analysis(fps, bounding_box, start_time, end_time, input_video, is_left_leg):
     VisionRunningMode = mp.tasks.vision.RunningMode
