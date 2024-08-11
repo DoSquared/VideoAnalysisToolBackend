@@ -17,17 +17,20 @@ from app.analysis.finderPeaksSignal import peakFinder
 from app.analysis.analysis import analysis, get_analysis_output
 # %%
 def filterSignal(rawSignal, fs=25, cutOffFrequency=5):
+    # Design a low-pass Butterworth filter and apply it to the raw signal
     b, a = signal.butter(2, cutOffFrequency, fs=fs, btype='low', analog=False)
     return signal.filtfilt(b, a, rawSignal)
 
 
 def run_time():
+     # Test function for leg raise analysis with specific video and parameters
     video_path = '/Users/amergu/Personal/webapps/ml-sample-app/backend/app/uploads/91D4C78179EA446.mp4'
     leg_raise_analysis(60, {'x': 263, 'y': 371, 'width': 528, 'height': 1465}, start_time=213.844, end_time=224.937,
                        input_video=video_path, is_left_leg=True)
 
 
 def json_serialize(obj):
+    # Custom JSON serializer to handle NumPy arrays and other objects
     if isinstance(obj, np.ndarray):
         return obj.tolist()
     else:
@@ -36,6 +39,7 @@ def json_serialize(obj):
 
 
 def leg_raise_analysis(fps, bounding_box, start_time, end_time, input_video, is_left_leg):
+    # Analyze leg raise task from a video using MediaPipe Pose Landmarker
     VisionRunningMode = mp.tasks.vision.RunningMode
     base_options = python.BaseOptions(model_asset_path='app/pose_landmarker_heavy.task')
     options = vision.PoseLandmarkerOptions(
@@ -46,27 +50,26 @@ def leg_raise_analysis(fps, bounding_box, start_time, end_time, input_video, is_
     detector = vision.PoseLandmarker.create_from_options(options)
     video = cv2.VideoCapture(input_video)
 
-    start_frame = round(fps * start_time)
-    end_frame = round(fps * end_time)
-    video.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-    frameCounter = start_frame
+start_frame = round(fps * start_time)  # Calculate the starting frame number
+    end_frame = round(fps * end_time)  # Calculate the ending frame number
+    video.set(cv2.CAP_PROP_POS_FRAMES, start_frame)  # Set the video to the start frame
+    frameCounter = start_frame  # Initialize frame counter
 
-    knee_landmarks = []
-    nose_landmarks = []
-    landmarks_signal = []
+    knee_landmarks = []  # List to store knee landmarks
+    nose_landmarks = []  # List to store nose landmarks
+    landmarks_signal = []  # List to store processed landmark signals
 
-    knee_landmark_pos = 26
-    nose_landmark_pos = 0
+    knee_landmark_pos = 26  # Default position for the right knee landmark
+    nose_landmark_pos = 0  # Position for the nose landmark
 
-    normalization_factor = 1
-
+    normalization_factor = 1  # Normalization factor for scaling
     if is_left_leg is True:
         knee_landmark_pos = 25
 
-    while frameCounter < end_frame:
-        status, frame = video.read()
+    while frameCounter < end_frame:  # Loop through the video frames
+        status, frame = video.read()  # Read a frame from the video
         if status == False:
-            break
+            break  # Exit loop if no more frames
 
         # detect landmarks
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -89,8 +92,8 @@ def leg_raise_analysis(fps, bounding_box, start_time, end_time, input_video, is_
             torso_mid = [((landmarks[23].x + landmarks[24].x) / 2) * (x2 - x1),
                                         ((landmarks[23].y + landmarks[24].y) / 2) * (y2 - y1)]
             normalization_factor = math.dist(shoulder_mid, torso_mid)
-
-
+        
+        # Get positions of knee and nose landmarks and normalize by the normalization factor
         p = [landmarks[knee_landmark_pos].x * (x2 - x1), landmarks[knee_landmark_pos].y * (y2 - y1)]
         q = [landmarks[nose_landmark_pos].x * (x2 - x1), landmarks[nose_landmark_pos].y * (y2 - y1)]
         landmarks_signal.append([0,(math.dist(p, q)/normalization_factor)])
@@ -109,18 +112,21 @@ def leg_raise_analysis(fps, bounding_box, start_time, end_time, input_video, is_
     signalOfInterest = np.array(landmarks_signal)[:, 1]
     signalOfInterest = filterSignal(signalOfInterest, cutOffFrequency=7.5)
 
-    # find peaks using custom algorithm
-    currentFs = 1 / fps
-    desiredFs = 1 / 60
+    # Find peaks in the signal using custom peakFinder algorithm
+    currentFs = 1 / fps  # Current sampling frequency
+    desiredFs = 1 / 60  # Desired sampling frequency
+
 
     duration = end_time - start_time
     print(duration)
 
+    # Create time vectors for original and upsampled signals
     timeVector = np.linspace(0, duration, int(duration / currentFs))
 
     newTimeVector = np.linspace(0, duration, int(duration / desiredFs))
     upsampleSignal = signal.resample(signalOfInterest, len(newTimeVector))
 
+    # Analyze the upsampled signal for distance, velocity, and peaks
     distance, velocity, peaks, indexPositiveVelocity, indexNegativeVelocity = peakFinder(upsampleSignal, fs=60,
                                                                                          minDistance=3,
                                                                                          cutOffFrequency=7.5, prct=0.05)
@@ -137,38 +143,36 @@ def leg_raise_analysis(fps, bounding_box, start_time, end_time, input_video, is_
     # ax.set_xlim([0, len(distance)])
     print(duration)
     print(frameCounter)
-    line_time = []
-    sizeOfDist = len(distance)
+
+    # Prepare data for plotting and analysis
+    line_time = []  # Initialize list for time data
+    sizeOfDist = len(distance)  # Get the size of the distance array
     for index, item in enumerate(distance):
-        line_time.append((index / sizeOfDist) * duration + start_time)
+        line_time.append((index / sizeOfDist) * duration + start_time)  # Calculate the corresponding time for each distance value
 
-    line_peaks = []
-    line_peaks_time = []
-    line_valleys_start = []
-    line_valleys_start_time = []
-    line_valleys_end = []
-    line_valleys_end_time = []
+    line_peaks = []  # Initialize list for peak data
+    line_peaks_time = []  # Initialize list for peak times
+    line_valleys_start = []  # Initialize list for valley start data
+    line_valleys_start_time = []  # Initialize list for valley start times
+    line_valleys_end = []  # Initialize list for valley end data
+    line_valleys_end_time = []  # Initialize list for valley end times
 
-    line_valleys = []
-    line_valleys_time = []
+    line_valleys = []  # Initialize list for valley data
+    line_valleys_time = []  # Initialize list for valley times
 
+ # Extract peak and valley information
     for index, item in enumerate(peaks):
-        # ax.plot(item['openingValleyIndex'], distance[item['openingValleyIndex']], 'ro', alpha=0.75)
-        # ax.plot(item['peakIndex'], distance[item['peakIndex']], 'go', alpha=0.75)
-        # ax.plot(item['closingValleyIndex'], distance[item['closingValleyIndex']], 'bo', alpha=0.75)
-        # line_valleys.append(prevValley+item['openingValleyIndex'])
+        line_peaks.append(distance[item['peakIndex']])  # Add peak distance to the list
+        line_peaks_time.append((item['peakIndex'] / sizeOfDist) * duration + start_time)  # Add peak time to the list
 
-        line_peaks.append(distance[item['peakIndex']])
-        line_peaks_time.append((item['peakIndex'] / sizeOfDist) * duration + start_time)
+        line_valleys_start.append(distance[item['openingValleyIndex']])  # Add valley start distance
+        line_valleys_start_time.append((item['openingValleyIndex'] / sizeOfDist) * duration + start_time)  # Add valley start time
 
-        line_valleys_start.append(distance[item['openingValleyIndex']])
-        line_valleys_start_time.append((item['openingValleyIndex'] / sizeOfDist) * duration + start_time)
+        line_valleys_end.append(distance[item['closingValleyIndex']])  # Add valley end distance
+        line_valleys_end_time.append((item['closingValleyIndex'] / sizeOfDist) * duration + start_time)  # Add valley end time
 
-        line_valleys_end.append(distance[item['closingValleyIndex']])
-        line_valleys_end_time.append((item['closingValleyIndex'] / sizeOfDist) * duration + start_time)
-
-        line_valleys.append(distance[item['openingValleyIndex']])
-        line_valleys_time.append((item['openingValleyIndex'] / sizeOfDist) * duration + start_time)
+        line_valleys.append(distance[item['openingValleyIndex']])  # Add valley data
+        line_valleys_time.append((item['openingValleyIndex'] / sizeOfDist) * duration + start_time)  # Add valley time
 
     amplitude = []
     peakTime = []
@@ -217,6 +221,7 @@ def leg_raise_analysis(fps, bounding_box, start_time, end_time, input_video, is_
     rangeCycleDuration = np.max(np.diff(peakTime)) - np.min(np.diff(peakTime))
     rate = len(peaks) / (peaks[-1]['closingValleyIndex'] - peaks[0]['openingValleyIndex']) / (1 / 60)
 
+    # Calculate decay metrics for amplitude, velocity, and rate
     earlyPeaks = peaks[:len(peaks) // 3]
     latePeaks = peaks[-len(peaks) // 3:]
     amplitudeDecay = np.mean(distance[:len(peaks) // 3]) / np.mean(distance[-len(peaks) // 3:])
@@ -228,6 +233,7 @@ def leg_raise_analysis(fps, bounding_box, start_time, end_time, input_video, is_
                         len(latePeaks) / (
                         (latePeaks[-1]['closingValleyIndex'] - latePeaks[0]['openingValleyIndex']) / (1 / 60)))
 
+    # Calculate coefficients of variation for different metrics
     cvAmplitude = stdAmplitude / meanAmplitude
     cvCycleDuration = stdCycleDuration / meanCycleDuration
     cvRMSVelocity = stdRMSVelocity / meanRMSVelocity
@@ -241,6 +247,7 @@ def leg_raise_analysis(fps, bounding_box, start_time, end_time, input_video, is_
     #                     amplitudeDecay, velocityDecay, rateDecay,
     #                     cvAmplitude, cvCycleDuration, cvRMSVelocity, cvAverageOpeningSpeed, cvAverageClosingSpeed])
 
+    # Create final JSON object with all results
     jsonFinal = {
         "linePlot": {
             "data": distance,
@@ -311,12 +318,17 @@ def leg_raise_analysis(fps, bounding_box, start_time, end_time, input_video, is_
 # run_time()
 
 def toe_tap_analysis(fps, bounding_box, start_time, end_time, input_video, is_left_leg):
+# Define the running mode for MediaPipe's vision tasks, specifically for processing video frames.
     VisionRunningMode = mp.tasks.vision.RunningMode
+     # Set up the base options for the MediaPipe Pose Landmarker, specifying the path to the model file.
     base_options = python.BaseOptions(model_asset_path='app/pose_landmarker_heavy.task')
+    
+    # Configure the Pose Landmarker with the specified options, including the running mode for video processing.
     options = vision.PoseLandmarkerOptions(
-        base_options=base_options,
-        output_segmentation_masks=False,
-        running_mode=VisionRunningMode.VIDEO)
+        base_options=base_options,  # Use the base options defined above.
+        output_segmentation_masks=False,  # Disable output of segmentation masks.
+        running_mode=VisionRunningMode.VIDEO  # Set the running mode to process video frames.
+    )
     
     detector = vision.PoseLandmarker.create_from_options(options)
     video = cv2.VideoCapture(input_video)
